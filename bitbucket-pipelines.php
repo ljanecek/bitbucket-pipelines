@@ -80,6 +80,18 @@ class Bitbucket_Pipelines
             }
         }
 
+        add_action('draft_to_publish', array($this, 'post_published_notification'));
+        add_action('future_to_publish', array($this, 'post_published_notification'));
+        add_action('private_to_publish', array($this, 'post_published_notification'));
+        add_action('post_updated', array($this, 'post_published_notification'));
+
+    }
+
+    public function post_published_notification()
+    {
+        if($this->options['publishing']){
+            $this->options['branch'] && $this->trigger_pipeline($this->options['branch']);
+        }
     }
 
     private function get_access_token()
@@ -114,29 +126,38 @@ class Bitbucket_Pipelines
     private function get_branches()
     {
 
-        $access_token = $this->get_access_token();
+        if (false === ($result = get_transient('bitbucket_pipelines_branches'))) {
 
-        $opts = [
-            'http' => [
-                'method' => 'GET',
-                'header' => [
-                    // 'Content-Type: application/json',
-                    'Authorization: Bearer ' . $access_token,
+            $access_token = $this->get_access_token();
+
+            $opts = [
+                'http' => [
+                    'method' => 'GET',
+                    'header' => [
+                        'Content-Type: application/json',
+                        'Authorization: Bearer ' . $access_token,
+                    ],
                 ],
-            ],
-        ];
+            ];
 
-        $url = sprintf($this->bitbucket_branches_url, $this->options['workspace'], $this->options['repo_slug']);
+            $url = sprintf($this->bitbucket_branches_url, $this->options['workspace'], $this->options['repo_slug']);
 
-        $context = stream_context_create($opts);
-        $reponse = file_get_contents($url, false, $context);
-        $output = json_decode($reponse);
+            $context = stream_context_create($opts);
+            $reponse = file_get_contents($url, false, $context);
+            $output = json_decode($reponse);
 
-        if (isset($output->values) && !empty($output->values)) {
-            return $output->values;
+            if (isset($output->values) && !empty($output->values)) {
+
+                $result = $output->values;
+
+                set_transient('bitbucket_pipelines_branches', $result, HOUR_IN_SECONDS);
+
+                return $result;
+            }
         }
 
-        return false;
+        return $result;
+
     }
 
     private function trigger_pipeline($branch)
@@ -151,7 +172,7 @@ class Bitbucket_Pipelines
                     'Content-Type: application/json',
                     'Authorization: Bearer ' . $access_token,
                 ],
-                'content' => http_build_query([
+                'content' => json_encode([
                     "target" => [
                         "ref_type" => "branch",
                         "type" => "pipeline_ref_target",
