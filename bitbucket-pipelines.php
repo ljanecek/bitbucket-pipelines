@@ -86,6 +86,8 @@ class Bitbucket_Pipelines
         add_action('post_updated', array($this, 'post_published_notification'));
         add_action('admin_bar_menu', array($this, 'add_admin_bar_control'), 999);
 
+        add_action('admin_notices', array($this, 'process_build_request'));
+
     }
 
     public function post_published_notification()
@@ -224,6 +226,15 @@ class Bitbucket_Pipelines
     public function add_admin_bar_control(WP_Admin_Bar $wp_admin_bar)
     {
 
+        $current_url = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' .
+            $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+
+        $goto_url = get_admin_url();
+
+        if (stristr($current_url, get_admin_url())) {
+            $goto_url = $current_url;
+        }
+
         $args = array(
             'id' => 'bitbucket-pipelines',
             'title' => '<span class="custom-icon" style="
@@ -246,9 +257,38 @@ class Bitbucket_Pipelines
             $wp_admin_bar->add_menu(array(
                 'parent' => 'bitbucket-pipelines',
                 'title' => 'Run <strong>' . $branch->name . '</strong> pipeline',
-                'href' => '#',
+                'href' => wp_nonce_url(add_query_arg('_bitbucket-pipelines__build', $branch->name, $goto_url), '_bitbucket-pipelines__build_nonce'),
             ));
         }
+    }
+
+    public static function process_build_request($data)
+    {
+
+        // check if clear request
+        if (empty($_GET['_bitbucket-pipelines__build'])) {
+            return;
+        }
+
+        // validate nonce
+        if (empty($_GET['_wpnonce']) or !wp_verify_nonce($_GET['_wpnonce'], '_bitbucket-pipelines__build_nonce')) {
+            return;
+        }
+
+        // check user role
+        if (!is_admin_bar_showing()) {
+            return;
+        }
+
+        // load if network
+        if (!function_exists('is_plugin_active_for_network')) {
+            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        }
+
+        $branch = $_GET['_bitbucket-pipelines__build'];
+
+        $this->trigger_pipeline($branch);
+
     }
 
     public function single_site_deactivate()
