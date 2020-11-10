@@ -262,7 +262,7 @@ class Bitbucket_Pipelines
         }
     }
 
-    public static function process_build_request($data)
+    public function process_build_request()
     {
 
         // check if clear request
