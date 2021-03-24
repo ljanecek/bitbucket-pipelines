@@ -6,7 +6,6 @@
  * Author:          Ladislav Janeček
  * Text Domain:     bitbucket-pipelines
  * Version:         0.1.0
- * Domain Path: /languages/
  *
  * @package         Bitbucket_Pipelines
  */
